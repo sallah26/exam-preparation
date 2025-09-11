@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import userRoutes from './routes/userRoutes';
 import adminRoutes from './routes/adminRoutes';
 import authRoutes from './modules/auth/routes/auth.routes';
+import examRoutes from './routes/examRoutes';
+import studentRoutes from './routes/studentRoutes';
 import { errorHandler } from './middlewares/errorHandler';
 import { TokenCleanupService } from './modules/auth/services/token-cleanup.service';
 
@@ -31,6 +33,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Cookie parser middleware (for JWT tokens)
 app.use(cookieParser(process.env['COOKIE_SECRET']));
 
+// Static file serving for uploads
+app.use('/uploads', express.static('uploads'));
+
 // Health check endpoint
 app.get('/health', (_req, res) => {
   res.status(200).json({
@@ -44,6 +49,8 @@ app.get('/health', (_req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin/exam', examRoutes);
+app.use('/api/student', studentRoutes);
 
 // Error handling middleware
 app.use(errorHandler);
@@ -63,6 +70,8 @@ app.listen(PORT, () => {
   console.log(`👥 Users API: http://localhost:${PORT}/api/users`);
   console.log(`👨‍💼 Admin API: http://localhost:${PORT}/api/admin`);
   console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
+  console.log(`📚 Exam Portal Admin: http://localhost:${PORT}/api/admin/exam`);
+  console.log(`🎓 Student Portal: http://localhost:${PORT}/api/student`);
   console.log(`🍪 Cookie-based authentication enabled`);
   
   // Start token cleanup service

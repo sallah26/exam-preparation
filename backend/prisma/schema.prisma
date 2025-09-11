@@ -43,3 +43,97 @@ model RefreshToken {
   @@index([adminId], map: "refresh_tokens_adminId_fkey")
   @@map("refresh_tokens")
 }
+
+model ExamType {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  departments Department[]
+
+  @@map("exam_types")
+}
+
+model Department {
+  id               String           @id @default(cuid())
+  name             String
+  examTypeId       String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  examType         ExamType         @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
+  academicPeriods  AcademicPeriod[]
+
+  @@index([examTypeId])
+  @@map("departments")
+}
+
+model AcademicPeriod {
+  id           String     @id @default(cuid())
+  name         String
+  departmentId String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  materials    Material[]
+
+  @@index([departmentId])
+  @@map("academic_periods")
+}
+
+model Material {
+  id               String         @id @default(cuid())
+  title            String
+  type             MaterialType
+  academicPeriodId String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  academicPeriod   AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+  document         Document?
+  questions        Question[]
+
+  @@index([academicPeriodId])
+  @@map("materials")
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  materialId   String   @unique
+  filePath     String
+  fileType     String
+  originalName String
+  createdAt    DateTime @default(now())
+  material     Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model Question {
+  id           String           @id @default(cuid())
+  materialId   String
+  questionText String           @db.Text
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  material     Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  options      QuestionOption[]
+
+  @@index([materialId])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id         String   @id @default(cuid())
+  questionId String
+  optionText String   @db.Text
+  isCorrect  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("question_options")
+}
+
+enum MaterialType {
+  DOCUMENT
+  QUESTION
+}
