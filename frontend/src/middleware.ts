@@ -3,7 +3,6 @@ import { COOKIE_NAMES, PROTECTED_ROUTES, PUBLIC_ROUTES } from "@/config/auth.con
 
 export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  
   // Skip middleware for API routes and static files
   if (pathname.startsWith('/api') || pathname.startsWith('/_next')) {
     return NextResponse.next();

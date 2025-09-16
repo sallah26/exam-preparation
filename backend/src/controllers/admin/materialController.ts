@@ -23,13 +23,13 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
-  const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+  const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.txt'];
   const extension = path.extname(file.originalname).toLowerCase();
   
   if (allowedTypes.includes(extension)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PDF, DOC, DOCX, JPG, JPEG, PNG are allowed.'), false);
+    cb(new Error('Invalid file type. Only PDF, DOC, DOCX, JPG, JPEG, PNG, GIF, TXT are allowed.'), false);
   }
 };
 
@@ -48,12 +48,16 @@ export const createMaterial = async (req: Request, res: Response) => {
     if (!academicPeriodId) {
       return res.status(400).json({
         success: false,
-        message: 'Academic period ID is required'
+        message: 'Academic Period ID is required'
       });
     }
     
     const material = await prisma.material.create({
-      data: { title, type, academicPeriodId }
+      data: {
+        academicPeriodId,
+        title,
+        type
+      }
     });
     
     return res.status(201).json({
@@ -75,14 +79,14 @@ export const getMaterials = async (req: Request, res: Response) => {
     if (!academicPeriodId) {
       return res.status(400).json({
         success: false,
-        message: 'Academic period ID is required'
+        message: 'Academic Period ID is required'
       });
     }
     
     const materials = await prisma.material.findMany({
       where: { academicPeriodId },
       include: {
-        document: true,
+        documents: true,
         questions: {
           include: {
             options: true
@@ -97,7 +101,7 @@ export const getMaterials = async (req: Request, res: Response) => {
       data: materials
     });
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(400).json({
       success: false,
       message: error.message
     });
@@ -115,16 +119,19 @@ export const deleteMaterial = async (req: Request, res: Response) => {
       });
     }
     
-    // Get material to check if it has a document file to delete
+    // Get material with documents to delete files
     const material = await prisma.material.findUnique({
       where: { id },
-      include: { document: true }
+      include: { documents: true }
     });
     
-    if (material?.document) {
-      const filePath = path.join(__dirname, '../../../uploads', path.basename(material.document.filePath));
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+    if (material?.documents && material.documents.length > 0) {
+      // Delete associated files from filesystem
+      for (const doc of material.documents) {
+        const filePath = path.join(__dirname, '../../../uploads', path.basename(doc.filePath));
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
       }
     }
     
@@ -148,7 +155,7 @@ export const deleteMaterial = async (req: Request, res: Response) => {
 export const uploadDocument = async (req: Request, res: Response) => {
   try {
     const { materialId } = req.params;
-    const file = req.file;
+    const files = req.files as Express.Multer.File[];
     
     if (!materialId) {
       return res.status(400).json({
@@ -157,25 +164,31 @@ export const uploadDocument = async (req: Request, res: Response) => {
       });
     }
     
-    if (!file) {
+    if (!files || files.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No file uploaded'
+        message: 'No files uploaded'
       });
     }
     
-    const document = await prisma.document.create({
-      data: {
-        materialId,
-        filePath: file.filename,
-        fileType: file.mimetype,
-        originalName: file.originalname
-      }
-    });
+    // Create documents for all uploaded files
+    const documents = await Promise.all(
+      files.map(file => 
+        prisma.document.create({
+          data: {
+            materialId,
+            filePath: file.filename,
+            fileType: file.mimetype,
+            originalName: file.originalname
+          }
+        })
+      )
+    );
     
     return res.status(201).json({
       success: true,
-      data: document
+      data: documents,
+      message: `${documents.length} file(s) uploaded successfully`
     });
   } catch (error: any) {
     return res.status(400).json({
@@ -189,7 +202,7 @@ export const uploadDocument = async (req: Request, res: Response) => {
 export const createQuestion = async (req: Request, res: Response) => {
   try {
     const { materialId } = req.params;
-    const { questionText, options } = req.body;
+    const { questionText, options, explanation } = req.body;
     
     if (!materialId) {
       return res.status(400).json({
@@ -202,6 +215,7 @@ export const createQuestion = async (req: Request, res: Response) => {
       data: {
         materialId,
         questionText,
+        explanation,
         options: {
           create: options.map((option: any) => ({
             optionText: option.text,
@@ -250,7 +264,7 @@ export const getQuestions = async (req: Request, res: Response) => {
       data: questions
     });
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(400).json({
       success: false,
       message: error.message
     });
@@ -260,7 +274,7 @@ export const getQuestions = async (req: Request, res: Response) => {
 export const updateQuestion = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { questionText, options } = req.body;
+    const { questionText, options, explanation } = req.body;
     
     if (!id) {
       return res.status(400).json({
@@ -278,6 +292,7 @@ export const updateQuestion = async (req: Request, res: Response) => {
       where: { id },
       data: {
         questionText,
+        explanation,
         options: {
           create: options.map((option: any) => ({
             optionText: option.text,

@@ -89,7 +89,7 @@ model Material {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   academicPeriod   AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
-  document         Document?
+  documents        Document[]
   questions        Question[]
 
   @@index([academicPeriodId])
@@ -98,13 +98,14 @@ model Material {
 
 model Document {
   id           String   @id @default(cuid())
-  materialId   String   @unique
+  materialId   String
   filePath     String
   fileType     String
   originalName String
   createdAt    DateTime @default(now())
   material     Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
+  @@index([materialId])
   @@map("documents")
 }
 
@@ -112,6 +113,7 @@ model Question {
   id           String           @id @default(cuid())
   materialId   String
   questionText String           @db.Text
+  explanation  String?          @db.Text
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   material     Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)

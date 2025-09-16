@@ -55,7 +55,7 @@ router.get('/academic-periods/:academicPeriodId/materials', getMaterials);
 router.delete('/materials/:id', deleteMaterial);
 
 // Document Upload
-router.post('/materials/:materialId/upload', upload.single('document'), uploadDocument);
+router.post('/materials/:materialId/upload', upload.array('files', 10), uploadDocument);
 
 // Questions
 router.post('/materials/:materialId/questions', createQuestion);
