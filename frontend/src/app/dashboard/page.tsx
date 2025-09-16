@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { adminExamApi, studentExamApi } from "@/lib/exam-api";
 import { ExamType, CreateExamTypeData } from "@/types/exam";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { AdminManagement } from "@/components/admin/AdminManagement";
+import { UserDashboard } from "@/components/user/UserDashboard";
+import { isSuperAdmin, isAdmin, isUser } from "@/lib/auth-utils";
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
@@ -20,7 +23,11 @@ export default function DashboardPage() {
     description: "",
   });
   const [activeTab, setActiveTab] = useState<
-    "overview" | "exam-types" | "student-view"
+    | "overview"
+    | "exam-types"
+    | "student-view"
+    | "admin-management"
+    | "user-dashboard"
   >("overview");
 
   // Memoize the auth state to prevent unnecessary re-renders
@@ -34,6 +41,23 @@ export default function DashboardPage() {
       loadExamTypes();
     }
   }, [isAuthenticated, activeTab]);
+
+  // Auto-redirect users to their appropriate dashboard
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (isUser(user) && activeTab === "overview") {
+        setActiveTab("user-dashboard");
+      } else if (isSuperAdmin(user) && activeTab === "overview") {
+        setActiveTab("admin-management");
+      } else if (
+        isAdmin(user) &&
+        !isSuperAdmin(user) &&
+        activeTab === "overview"
+      ) {
+        setActiveTab("exam-types");
+      }
+    }
+  }, [isAuthenticated, user]);
 
   const loadExamTypes = async () => {
     try {
@@ -87,10 +111,6 @@ export default function DashboardPage() {
     }
   }, [logout, router]);
 
-  const handleViewStudentPortal = () => {
-    window.open("/", "_blank");
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -124,11 +144,6 @@ export default function DashboardPage() {
               </h1>
             </div>
             <div className="flex items-center space-x-4">
-              <button
-                onClick={handleViewStudentPortal}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                View Student Portal
-              </button>
               <div className="flex items-center space-x-3">
                 <div className="flex-shrink-0">
                   <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center">
@@ -158,33 +173,62 @@ export default function DashboardPage() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab("overview")}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === "overview"
-                  ? "border-indigo-500 text-indigo-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}>
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveTab("exam-types")}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === "exam-types"
-                  ? "border-indigo-500 text-indigo-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}>
-              Exam Portal Management
-            </button>
-            <button
-              onClick={() => setActiveTab("student-view")}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === "student-view"
-                  ? "border-indigo-500 text-indigo-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}>
-              Student View
-            </button>
+            {/* Show User Dashboard tab for regular users */}
+            {isUser(user) && (
+              <button
+                onClick={() => setActiveTab("user-dashboard")}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === "user-dashboard"
+                    ? "border-indigo-500 text-indigo-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}>
+                My Dashboard
+              </button>
+            )}
+
+            {/* Show admin tabs for admin users */}
+            {isAdmin(user) && (
+              <>
+                <button
+                  onClick={() => setActiveTab("overview")}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === "overview"
+                      ? "border-indigo-500 text-indigo-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}>
+                  Overview
+                </button>
+                <button
+                  onClick={() => setActiveTab("exam-types")}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === "exam-types"
+                      ? "border-indigo-500 text-indigo-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}>
+                  Exam Portal Management
+                </button>
+                <button
+                  onClick={() => setActiveTab("student-view")}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === "student-view"
+                      ? "border-indigo-500 text-indigo-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}>
+                  Student View
+                </button>
+                {isSuperAdmin(user) && (
+                  <button
+                    onClick={() => setActiveTab("admin-management")}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === "admin-management"
+                        ? "border-indigo-500 text-indigo-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}>
+                    Admin Management
+                  </button>
+                )}
+              </>
+            )}
           </nav>
         </div>
       </div>
@@ -462,13 +506,20 @@ export default function DashboardPage() {
                   title="Student Portal Preview"
                 />
               </div>
-              <div className="mt-4 text-center">
-                <button
-                  onClick={handleViewStudentPortal}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-md font-medium">
-                  Open Student Portal in New Tab
-                </button>
-              </div>
+            </div>
+          )}
+
+          {/* Admin Management Tab */}
+          {activeTab === "admin-management" && isSuperAdmin(user) && (
+            <div className="px-4 sm:px-0">
+              <AdminManagement />
+            </div>
+          )}
+
+          {/* User Dashboard Tab */}
+          {activeTab === "user-dashboard" && isUser(user) && (
+            <div className="px-4 sm:px-0">
+              <UserDashboard />
             </div>
           )}
         </div>

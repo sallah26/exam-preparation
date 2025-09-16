@@ -1,41 +1,23 @@
 import { Router } from 'express';
 import { UserController } from '../controllers/userController';
+import { UserProgressController } from '../controllers/userProgressController';
+import { requireUser, requireAuth, optionalAuth } from '../modules/auth/middleware/auth.middleware';
 
 const router = Router();
 
-/**
- * @route   GET /api/users
- * @desc    Get all users with pagination and search
- * @access  Public
- */
-router.get('/', UserController.getUsers);
+// User profile routes (require user authentication)
+router.get('/profile', requireUser, UserController.getProfile);
+router.put('/profile', requireUser, UserController.updateProfile);
 
-/**
- * @route   POST /api/users
- * @desc    Create a new user
- * @access  Public
- */
-router.post('/', UserController.createUser);
+// User progress routes (require user authentication)
+router.post('/progress', requireUser, UserProgressController.recordProgress);
+router.get('/progress/stats', requireUser, UserProgressController.getUserStats);
+router.get('/progress/materials/:materialId', requireUser, UserProgressController.getMaterialProgress);
+router.get('/progress/exam-types', requireUser, UserProgressController.getProgressByExamType);
+router.post('/progress/materials/:materialId/complete', requireUser, UserProgressController.markCompleted);
+router.get('/dashboard', requireUser, UserProgressController.getDashboardData);
 
-/**
- * @route   GET /api/users/:id
- * @desc    Get a single user by ID
- * @access  Public
- */
-router.get('/:id', UserController.getUserById);
-
-/**
- * @route   PATCH /api/users/:id
- * @desc    Update a user by ID
- * @access  Public
- */
-router.patch('/:id', UserController.updateUser);
-
-/**
- * @route   DELETE /api/users/:id
- * @desc    Delete a user by ID
- * @access  Public
- */
-router.delete('/:id', UserController.deleteUser);
+// Public routes (optional auth for personalized experience)
+router.get('/leaderboard', optionalAuth, UserProgressController.getLeaderboard);
 
 export default router; 

@@ -8,11 +8,15 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  isActive     Boolean        @default(true)
+  password     String
+  role         UserRole       @default(USER)
+  userProgress UserProgress[]
 
   @@map("users")
 }
@@ -25,14 +29,19 @@ model Admin {
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  createdBy     String?
+  isSuperAdmin  Boolean        @default(false)
+  creator       Admin?         @relation("AdminCreator", fields: [createdBy], references: [id])
+  createdAdmins Admin[]        @relation("AdminCreator")
   refreshTokens RefreshToken[]
 
+  @@index([createdBy], map: "admins_createdBy_fkey")
   @@map("admins")
 }
 
 model RefreshToken {
   id        String   @id @default(cuid())
-  token     String   @unique
+  token     String   @unique @db.VarChar(1000)
   adminId   String
   expiresAt DateTime
   isRevoked Boolean  @default(false)
@@ -42,6 +51,24 @@ model RefreshToken {
 
   @@index([adminId], map: "refresh_tokens_adminId_fkey")
   @@map("refresh_tokens")
+}
+
+model UserProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  materialId   String
+  completed    Boolean  @default(false)
+  timeSpent    Int      @default(0)
+  lastAccessed DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  material     Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, materialId])
+  @@index([userId])
+  @@index([materialId], map: "user_progress_materialId_fkey")
+  @@map("user_progress")
 }
 
 model ExamType {
@@ -56,13 +83,13 @@ model ExamType {
 }
 
 model Department {
-  id               String           @id @default(cuid())
-  name             String
-  examTypeId       String
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  examType         ExamType         @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
-  academicPeriods  AcademicPeriod[]
+  id              String           @id @default(cuid())
+  name            String
+  examTypeId      String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  academicPeriods AcademicPeriod[]
+  examType        ExamType         @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
 
   @@index([examTypeId])
   @@map("departments")
@@ -88,9 +115,10 @@ model Material {
   academicPeriodId String
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
-  academicPeriod   AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
   documents        Document[]
+  academicPeriod   AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
   questions        Question[]
+  userProgress     UserProgress[]
 
   @@index([academicPeriodId])
   @@map("materials")
@@ -116,8 +144,8 @@ model Question {
   explanation  String?          @db.Text
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
-  material     Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
   options      QuestionOption[]
+  material     Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@index([materialId])
   @@map("questions")
@@ -133,6 +161,12 @@ model QuestionOption {
 
   @@index([questionId])
   @@map("question_options")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
 }
 
 enum MaterialType {

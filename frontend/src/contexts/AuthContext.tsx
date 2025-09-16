@@ -102,7 +102,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const initializeAuth = async () => {
       try {
         console.log("[AuthContext] Starting auth initialization");
-        dispatch({ type: "AUTH_START" });
+        dispatch({ type: "SET_LOADING", payload: true });
 
         // Check if user is already authenticated (client-side)
         const user = getAuthUserClient();
@@ -112,10 +112,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           console.log("[AuthContext] User found, dispatching success");
           dispatch({ type: "AUTH_SUCCESS", payload: user });
         } else {
-          console.log("[AuthContext] No user found, dispatching failure");
+          console.log("[AuthContext] No user found, setting not authenticated");
+          // Don't show error for initialization - just set as not authenticated
           dispatch({
-            type: "AUTH_FAILURE",
-            payload: "No authenticated user found",
+            type: "AUTH_LOGOUT", // This sets isAuthenticated to false without error
           });
         }
       } catch (error) {
@@ -140,8 +140,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("[AuthContext] Login response:", response);
 
       if (response.success && response.data) {
-        const userData = (response.data as { admin: AuthUser }).admin;
+        // Handle both admin and user login responses
+        const userData =
+          (response.data as { admin?: AuthUser; user?: AuthUser }).admin ||
+          (response.data as { admin?: AuthUser; user?: AuthUser }).user;
         console.log("[AuthContext] User data:", userData);
+
+        if (!userData) {
+          console.log("[AuthContext] No user data in response");
+          dispatch({ type: "AUTH_FAILURE", payload: "No user data received" });
+          return false;
+        }
 
         // Save auth data client-side
         const responseData = response.data as {
@@ -204,6 +213,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await authApi.logout();
 
       // Clear local state
+      removeAuthClient();
       dispatch({ type: "AUTH_LOGOUT" });
     } catch (error) {
       console.error("Logout error:", error);

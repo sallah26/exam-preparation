@@ -1,22 +1,33 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticationError } from '../utils/auth.errors';
-import { JWTService } from '../services/jwt.service';
+import { LoginService } from '../services/login.service';
+import { UserRole } from '@prisma/client';
 
 declare global {
   namespace Express {
     interface Request {
+      user?: {
+        type: 'user' | 'admin';
+        id: string;
+        email: string;
+        name: string;
+        role: UserRole;
+        isActive: boolean;
+        isSuperAdmin?: boolean;
+      };
       admin?: {
         adminId: string;
         email: string;
         fullName: string;
+        role: UserRole;
+        isSuperAdmin: boolean;
       };
     }
   }
 }
 
 /**
- * Middleware to authenticate requests using access token
- * Supports both cookie-based and header-based authentication
+ * Base authentication middleware - validates token and attaches user info
  */
 export const authMiddleware = async (
   req: Request,
@@ -43,15 +54,22 @@ export const authMiddleware = async (
       return;
     }
 
-    // Verify access token
-    const decoded = JWTService.verifyAccessToken(token);
+    // Get user info from token
+    const userInfo = await LoginService.getUserByToken(token);
 
-    // Attach admin info to request
-    req.admin = {
-      adminId: decoded.adminId,
-      email: decoded.email,
-      fullName: decoded.fullName,
-    };
+    // Attach user info to request
+    req.user = userInfo;
+
+    // Also attach admin info for backward compatibility
+    if (userInfo.type === 'admin') {
+      req.admin = {
+        adminId: userInfo.id,
+        email: userInfo.email,
+        fullName: userInfo.name,
+        role: userInfo.role,
+        isSuperAdmin: userInfo.isSuperAdmin || false,
+      };
+    }
 
     next();
   } catch (error) {
@@ -71,12 +89,58 @@ export const authMiddleware = async (
 };
 
 /**
+ * Role-based authentication middleware factory
+ */
+export const requireRole = (allowedRoles: UserRole[]) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    // First run base auth middleware
+    await new Promise<void>((resolve, reject) => {
+      authMiddleware(req, res, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Check if user has required role
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions',
+      });
+      return;
+    }
+
+    next();
+  };
+};
+
+/**
+ * Admin-only authentication middleware (ADMIN or SUPER_ADMIN)
+ */
+export const requireAdmin = requireRole([UserRole.ADMIN, UserRole.SUPER_ADMIN]);
+
+/**
+ * Super Admin-only authentication middleware
+ */
+export const requireSuperAdmin = requireRole([UserRole.SUPER_ADMIN]);
+
+/**
+ * User-only authentication middleware
+ */
+export const requireUser = requireRole([UserRole.USER]);
+
+/**
+ * Admin or User authentication middleware (any authenticated user)
+ */
+export const requireAuth = requireRole([UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN]);
+
+/**
  * Optional authentication middleware
- * Doesn't fail if no token is provided, but attaches admin info if valid token exists
+ * Doesn't fail if no token is provided, but attaches user info if valid token exists
  */
 export const optionalAuth = async (
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
@@ -91,78 +155,53 @@ export const optionalAuth = async (
       }
     }
 
-    if (token) {
-      // Verify access token
-      const decoded = JWTService.verifyAccessToken(token);
-
-      // Attach admin info to request
-      req.admin = {
-        adminId: decoded.adminId,
-        email: decoded.email,
-        fullName: decoded.fullName,
-      };
-    }
-  } catch (error) {
-    // Silently ignore token errors for optional auth
-    // req.admin will remain undefined
-  }
-
-  next();
-};
-
-/**
- * Middleware to require active admin status
- */
-export const requireActiveAdmin = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    if (!req.admin) {
-      res.status(401).json({
-        success: false,
-        message: 'Authentication required',
-      });
+    // If no token, continue without user info
+    if (!token) {
+      next();
       return;
     }
 
-    // Check if admin is still active in database
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    // Try to get user info from token
+    try {
+      const userInfo = await LoginService.getUserByToken(token);
+      req.user = userInfo;
 
-    const admin = await prisma.admin.findUnique({
-      where: { id: req.admin.adminId },
-      select: { isActive: true },
-    });
-
-    if (!admin || !admin.isActive) {
-      res.status(403).json({
-        success: false,
-        message: 'Account is deactivated',
-      });
-      return;
+      // Also attach admin info for backward compatibility
+      if (userInfo.type === 'admin') {
+        req.admin = {
+          adminId: userInfo.id,
+          email: userInfo.email,
+          fullName: userInfo.name,
+          role: userInfo.role,
+          isSuperAdmin: userInfo.isSuperAdmin || false,
+        };
+      }
+    } catch (error) {
+      // Token is invalid, but don't fail - just continue without user info
+      console.log('Optional auth failed:', error instanceof AuthenticationError ? error.message : 'Unknown error');
     }
 
     next();
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    // Don't fail on errors in optional auth
+    next();
   }
 };
 
 /**
- * Middleware to check if user is authenticated (for conditional logic)
+ * Middleware to check if user is admin (for conditional logic)
  */
-export const isAuthenticated = (req: Request): boolean => {
-  return !!req.admin;
+export const checkAdminRole = (req: Request, res: Response, next: NextFunction): void => {
+  const isAdmin = req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.SUPER_ADMIN;
+  (req as any).isAdmin = isAdmin;
+  next();
 };
 
 /**
- * Middleware to get admin ID from request
+ * Middleware to check if user is super admin (for conditional logic)
  */
-export const getAdminId = (req: Request): string | null => {
-  return req.admin?.adminId || null;
+export const checkSuperAdminRole = (req: Request, res: Response, next: NextFunction): void => {
+  const isSuperAdmin = req.user?.role === UserRole.SUPER_ADMIN;
+  (req as any).isSuperAdmin = isSuperAdmin;
+  next();
 }; 

@@ -15,7 +15,7 @@ export const COOKIE_NAMES = {
 // Auth routes (matching backend)
 export const AUTH_ROUTES = {
   LOGIN: '/api/auth/login',
-  REGISTER: '/api/admin/register',
+  REGISTER: '/api/auth/user/register',  // Fixed: User registration endpoint
   REFRESH: '/api/auth/refresh',
   LOGOUT: '/api/auth/logout',
   PROFILE: '/api/auth/profile',

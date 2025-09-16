@@ -1,4 +1,5 @@
 import { JWTService } from './jwt.service';
+import { prisma } from '../../../prisma/client';
 
 export class TokenCleanupService {
   private static cleanupInterval: NodeJS.Timeout | null = null;
@@ -40,11 +41,18 @@ export class TokenCleanupService {
    */
   static async performCleanup(): Promise<void> {
     try {
-      const deletedCount = await JWTService.cleanupExpiredTokens();
+      // Clean up expired tokens manually
+      const deletedCount = await prisma.refreshToken.deleteMany({
+        where: {
+          expiresAt: {
+            lt: new Date(),
+          },
+        },
+      });
       
-      if (deletedCount > 0) {
-        console.log(`🧹 Cleaned up ${deletedCount} expired refresh tokens`);
-      }
+              if (deletedCount.count > 0) {
+          console.log(`🧹 Cleaned up ${deletedCount.count} expired refresh tokens`);
+        }
     } catch (error) {
       console.error('Error during token cleanup:', error);
     }

@@ -2,12 +2,27 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { AuthenticationError } from '../utils/auth.errors';
 import { prisma } from '../../../prisma/client';
+import { UserRole } from '@prisma/client';
 
-export interface TokenPayload {
-  adminId: string;
+// Enhanced token payload for multi-role system
+export interface BaseTokenPayload {
   email: string;
-  fullName: string;
   type: 'access' | 'refresh';
+  role: UserRole;
+  isActive: boolean;
+}
+
+export interface AdminTokenPayload extends BaseTokenPayload {
+  adminId: string;
+  fullName: string;
+  role: 'ADMIN' | 'SUPER_ADMIN';
+  isSuperAdmin: boolean;
+}
+
+export interface UserTokenPayload extends BaseTokenPayload {
+  userId: string;
+  name: string;
+  role: 'USER';
 }
 
 export interface TokenPair {
@@ -36,9 +51,9 @@ export class JWTService {
   private static readonly AUDIENCE = process.env['JWT_AUDIENCE'] || 'addis-admin-users';
 
   /**
-   * Generate access token
+   * Generate access token for admin
    */
-  static generateAccessToken(payload: Omit<TokenPayload, 'type'>): string {
+  static generateAdminAccessToken(payload: Omit<AdminTokenPayload, 'type'>): string {
     if (!this.ACCESS_SECRET) {
       throw new AuthenticationError('JWT access secret not configured');
     }
@@ -55,9 +70,28 @@ export class JWTService {
   }
 
   /**
-   * Generate refresh token
+   * Generate access token for user
    */
-  static generateRefreshToken(payload: Omit<TokenPayload, 'type'>): string {
+  static generateUserAccessToken(payload: Omit<UserTokenPayload, 'type'>): string {
+    if (!this.ACCESS_SECRET) {
+      throw new AuthenticationError('JWT access secret not configured');
+    }
+
+    return jwt.sign(
+      { ...payload, type: 'access' },
+      this.ACCESS_SECRET,
+      {
+        expiresIn: this.ACCESS_EXPIRES_IN,
+        issuer: this.ISSUER,
+        audience: this.AUDIENCE,
+      }
+    );
+  }
+
+  /**
+   * Generate refresh token (admin only for now)
+   */
+  static generateRefreshToken(payload: Pick<AdminTokenPayload, 'adminId' | 'email' | 'fullName' | 'role'>): string {
     if (!this.REFRESH_SECRET) {
       throw new AuthenticationError('JWT refresh secret not configured');
     }
@@ -74,11 +108,23 @@ export class JWTService {
   }
 
   /**
-   * Generate token pair (access + refresh)
+   * Generate token pair for admin
    */
-  static generateTokenPair(payload: Omit<TokenPayload, 'type'>): TokenPair {
-    const accessToken = this.generateAccessToken(payload);
-    const refreshToken = this.generateRefreshToken(payload);
+  static generateAdminTokenPair(payload: {
+    adminId: string;
+    email: string;
+    fullName: string;
+    role: 'ADMIN' | 'SUPER_ADMIN';
+    isActive: boolean;
+    isSuperAdmin: boolean;
+  }): TokenPair {
+    const accessToken = this.generateAdminAccessToken(payload);
+    const refreshToken = this.generateRefreshToken({
+      adminId: payload.adminId,
+      email: payload.email,
+      fullName: payload.fullName,
+      role: payload.role,
+    });
 
     return {
       accessToken,
@@ -89,9 +135,27 @@ export class JWTService {
   }
 
   /**
-   * Verify access token
+   * Generate token pair for user (access token only for now)
    */
-  static verifyAccessToken(token: string): TokenPayload {
+  static generateUserTokenPair(payload: {
+    userId: string;
+    email: string;
+    name: string;
+    role: 'USER';
+    isActive: boolean;
+  }): { accessToken: string; accessExpiresIn: string } {
+    const accessToken = this.generateUserAccessToken(payload);
+
+    return {
+      accessToken,
+      accessExpiresIn: this.ACCESS_EXPIRES_IN,
+    };
+  }
+
+  /**
+   * Verify access token and return payload
+   */
+  static verifyAccessToken(token: string): AdminTokenPayload | UserTokenPayload {
     if (!this.ACCESS_SECRET) {
       throw new AuthenticationError('JWT access secret not configured');
     }
@@ -100,7 +164,7 @@ export class JWTService {
       const decoded = jwt.verify(token, this.ACCESS_SECRET, {
         issuer: this.ISSUER,
         audience: this.AUDIENCE,
-      }) as TokenPayload;
+      }) as any;
 
       if (decoded.type !== 'access') {
         throw new AuthenticationError('Invalid token type');
@@ -108,11 +172,11 @@ export class JWTService {
 
       return decoded;
     } catch (error) {
-      if (error instanceof jwt.TokenExpiredError) {
-        throw new AuthenticationError('Access token expired');
-      }
       if (error instanceof jwt.JsonWebTokenError) {
         throw new AuthenticationError('Invalid access token');
+      }
+      if (error instanceof jwt.TokenExpiredError) {
+        throw new AuthenticationError('Access token expired');
       }
       throw error;
     }
@@ -121,7 +185,7 @@ export class JWTService {
   /**
    * Verify refresh token
    */
-  static verifyRefreshToken(token: string): TokenPayload {
+  static verifyRefreshToken(token: string): AdminTokenPayload {
     if (!this.REFRESH_SECRET) {
       throw new AuthenticationError('JWT refresh secret not configured');
     }
@@ -130,7 +194,7 @@ export class JWTService {
       const decoded = jwt.verify(token, this.REFRESH_SECRET, {
         issuer: this.ISSUER,
         audience: this.AUDIENCE,
-      }) as TokenPayload;
+      }) as any;
 
       if (decoded.type !== 'refresh') {
         throw new AuthenticationError('Invalid token type');
@@ -138,117 +202,69 @@ export class JWTService {
 
       return decoded;
     } catch (error) {
-      if (error instanceof jwt.TokenExpiredError) {
-        throw new AuthenticationError('Refresh token expired');
-      }
       if (error instanceof jwt.JsonWebTokenError) {
         throw new AuthenticationError('Invalid refresh token');
+      }
+      if (error instanceof jwt.TokenExpiredError) {
+        throw new AuthenticationError('Refresh token expired');
       }
       throw error;
     }
   }
 
   /**
-   * Store refresh token in database (hashed)
+   * Store refresh token in database
    */
-  static async storeRefreshToken(
-    adminId: string,
-    refreshToken: string,
-    expiresAt: Date
-  ): Promise<RefreshTokenData> {
-    const hashedToken = await bcrypt.hash(refreshToken, 12);
-
-    const storedToken = await prisma.refreshToken.create({
+  static async storeRefreshToken(adminId: string, token: string, expiresAt: Date): Promise<void> {
+    await prisma.refreshToken.create({
       data: {
-        token: hashedToken,
+        token,
         adminId,
         expiresAt,
       },
     });
-
-    return storedToken;
   }
 
   /**
    * Validate refresh token from database
    */
-  static async validateRefreshToken(
-    adminId: string,
-    refreshToken: string
-  ): Promise<RefreshTokenData | null> {
-    const storedTokens = await prisma.refreshToken.findMany({
-      where: {
-        adminId,
-        isRevoked: false,
-        expiresAt: {
-          gt: new Date(),
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+  static async validateRefreshTokenFromDB(token: string): Promise<RefreshTokenData> {
+    const refreshToken = await prisma.refreshToken.findUnique({
+      where: { token },
     });
 
-    for (const storedToken of storedTokens) {
-      const isValid = await bcrypt.compare(refreshToken, storedToken.token);
-      if (isValid) {
-        return storedToken;
-      }
+    if (!refreshToken) {
+      throw new AuthenticationError('Invalid refresh token');
     }
 
-    return null;
+    if (refreshToken.isRevoked) {
+      throw new AuthenticationError('Refresh token has been revoked');
+    }
+
+    if (refreshToken.expiresAt < new Date()) {
+      throw new AuthenticationError('Refresh token expired');
+    }
+
+    return refreshToken;
   }
 
   /**
    * Revoke refresh token
    */
-  static async revokeRefreshToken(tokenId: string): Promise<void> {
-    await prisma.refreshToken.update({
-      where: { id: tokenId },
+  static async revokeRefreshToken(token: string): Promise<void> {
+    await prisma.refreshToken.updateMany({
+      where: { token },
       data: { isRevoked: true },
     });
   }
 
   /**
-   * Revoke all refresh tokens for an admin
+   * Revoke all refresh tokens for admin
    */
   static async revokeAllRefreshTokens(adminId: string): Promise<void> {
     await prisma.refreshToken.updateMany({
-      where: { adminId, isRevoked: false },
+      where: { adminId },
       data: { isRevoked: true },
-    });
-  }
-
-  /**
-   * Clean up expired refresh tokens
-   */
-  static async cleanupExpiredTokens(): Promise<number> {
-    const result = await prisma.refreshToken.deleteMany({
-      where: {
-        expiresAt: {
-          lt: new Date(),
-        },
-      },
-    });
-
-    return result.count;
-  }
-
-  /**
-   * Get active refresh tokens for an admin
-   */
-  static async getActiveRefreshTokens(adminId: string): Promise<RefreshTokenData[]> {
-    return await prisma.refreshToken.findMany({
-      where: {
-        adminId,
-        isRevoked: false,
-        expiresAt: {
-          gt: new Date(),
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
     });
   }
 
@@ -259,22 +275,55 @@ export class JWTService {
     const expiresIn = this.REFRESH_EXPIRES_IN;
     const now = new Date();
 
-    if (expiresIn.includes('d')) {
-      const days = parseInt(expiresIn.replace('d', ''));
-      return new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-    }
+    // Parse the expiration string (e.g., "7d", "1h", "30m")
+    const timeValue = parseInt(expiresIn.slice(0, -1));
+    const timeUnit = expiresIn.slice(-1);
 
-    if (expiresIn.includes('h')) {
-      const hours = parseInt(expiresIn.replace('h', ''));
-      return new Date(now.getTime() + hours * 60 * 60 * 1000);
+    switch (timeUnit) {
+      case 'd':
+        return new Date(now.getTime() + timeValue * 24 * 60 * 60 * 1000);
+      case 'h':
+        return new Date(now.getTime() + timeValue * 60 * 60 * 1000);
+      case 'm':
+        return new Date(now.getTime() + timeValue * 60 * 1000);
+      default:
+        return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // Default to 7 days
     }
+  }
 
-    if (expiresIn.includes('m')) {
-      const minutes = parseInt(expiresIn.replace('m', ''));
-      return new Date(now.getTime() + minutes * 60 * 1000);
-    }
+  /**
+   * Hash password
+   */
+  static async hashPassword(password: string): Promise<string> {
+    const saltRounds = 12;
+    return bcrypt.hash(password, saltRounds);
+  }
 
-    // Default to 7 days if parsing fails
-    return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  /**
+   * Verify password
+   */
+  static async verifyPassword(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
+  }
+
+  /**
+   * Check if user has required role
+   */
+  static hasRole(userRole: UserRole, requiredRoles: UserRole[]): boolean {
+    return requiredRoles.includes(userRole);
+  }
+
+  /**
+   * Check if user is admin (ADMIN or SUPER_ADMIN)
+   */
+  static isAdmin(role: UserRole): boolean {
+    return role === 'ADMIN' || role === 'SUPER_ADMIN';
+  }
+
+  /**
+   * Check if user is super admin
+   */
+  static isSuperAdmin(role: UserRole): boolean {
+    return role === 'SUPER_ADMIN';
   }
 } 

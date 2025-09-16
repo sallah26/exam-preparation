@@ -1,15 +1,25 @@
 "use client";
 
 import React, { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { PublicRoute } from "@/components/auth/PublicRoute";
 import { RegisterCredentials } from "@/types/auth";
+import { authApi } from "@/lib/api";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export default function RegisterPage() {
-  const { register, isLoading, error, clearError } = useAuth();
+  const router = useRouter();
   const [credentials, setCredentials] = useState<RegisterCredentials>({
-    fullName: "",
+    name: "",
     email: "",
     password: "",
   });
@@ -17,6 +27,11 @@ export default function RegisterPage() {
   const [formErrors, setFormErrors] = useState<
     Partial<RegisterCredentials & { confirmPassword: string }>
   >({});
+  const [registrationError, setRegistrationError] = useState<string | null>(
+    null
+  );
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -27,9 +42,9 @@ export default function RegisterPage() {
       setFormErrors((prev) => ({ ...prev, [name]: undefined }));
     }
 
-    // Clear auth error when user starts typing
-    if (error) {
-      clearError();
+    // Clear registration error when user starts typing
+    if (registrationError) {
+      setRegistrationError(null);
     }
   };
 
@@ -43,8 +58,8 @@ export default function RegisterPage() {
       setFormErrors((prev) => ({ ...prev, confirmPassword: undefined }));
     }
 
-    if (error) {
-      clearError();
+    if (registrationError) {
+      setRegistrationError(null);
     }
   };
 
@@ -52,15 +67,15 @@ export default function RegisterPage() {
     const errors: Partial<RegisterCredentials & { confirmPassword: string }> =
       {};
 
-    // Full name validation
-    if (!credentials.fullName) {
-      errors.fullName = "Full name is required";
-    } else if (credentials.fullName.length < 2) {
-      errors.fullName = "Full name must be at least 2 characters";
-    } else if (credentials.fullName.length > 100) {
-      errors.fullName = "Full name must be less than 100 characters";
-    } else if (!/^[a-zA-Z\s]+$/.test(credentials.fullName)) {
-      errors.fullName = "Full name can only contain letters and spaces";
+    // Name validation
+    if (!credentials.name) {
+      errors.name = "Name is required";
+    } else if (credentials.name.length < 2) {
+      errors.name = "Name must be at least 2 characters";
+    } else if (credentials.name.length > 100) {
+      errors.name = "Name must be less than 100 characters";
+    } else if (!/^[a-zA-Z\s]+$/.test(credentials.name)) {
+      errors.name = "Name can only contain letters and spaces";
     }
 
     // Email validation
@@ -101,33 +116,53 @@ export default function RegisterPage() {
       return;
     }
 
-    const success = await register(credentials);
-    if (success) {
-      // Registration successful, user will be redirected to login
-      console.log("Registration successful!");
+    setIsLoading(true);
+    setRegistrationError(null);
+
+    try {
+      // Call the API directly to get the specific error message
+      const response = await authApi.register(credentials);
+
+      if (response.success) {
+        // Show success dialog
+        setShowSuccessDialog(true);
+      } else {
+        // Show the specific error message from the API
+        setRegistrationError(response.message);
+      }
+    } catch (error) {
+      setRegistrationError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleSuccessDialogClose = () => {
+    setShowSuccessDialog(false);
+    router.push("/auth/login");
   };
 
   return (
     <PublicRoute>
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
+        <div className="max-w-lg w-full space-y-8 border p-8 shadow-2xl rounded-2xl">
+          <div className="w-full">
             <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
               Create your account
             </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Or{" "}
-              <Link
-                href="/auth/login"
-                className="font-medium text-indigo-600 hover:text-indigo-500">
-                sign in to your existing account
-              </Link>
-            </p>
+
+            {/* Registration Error Display */}
+            {registrationError && (
+              <div className="mt-4 text-center">
+                <p className="text-sm text-red-600 font-medium">
+                  {registrationError}
+                </p>
+              </div>
+            )}
           </div>
 
           <form
-            className="mt-8 space-y-6"
+            className="mt-8 space-y-4"
             onSubmit={handleSubmit}>
             <div className="space-y-4">
               {/* Full Name */}
@@ -138,22 +173,20 @@ export default function RegisterPage() {
                   Full Name
                 </label>
                 <input
-                  id="fullName"
-                  name="fullName"
+                  id="name"
+                  name="name"
                   type="text"
                   autoComplete="name"
                   required
-                  className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                    formErrors.fullName ? "border-red-300" : "border-gray-300"
+                  className={`mt-1 appearance-none relative block w-full px-3 py-3 border ${
+                    formErrors.name ? "border-red-300" : "border-gray-300"
                   } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                   placeholder="Enter your full name"
-                  value={credentials.fullName}
+                  value={credentials.name}
                   onChange={handleInputChange}
                 />
-                {formErrors.fullName && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {formErrors.fullName}
-                  </p>
+                {formErrors.name && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
                 )}
               </div>
 
@@ -170,7 +203,7 @@ export default function RegisterPage() {
                   type="email"
                   autoComplete="email"
                   required
-                  className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
+                  className={`mt-1 appearance-none relative block w-full px-3 py-3 border ${
                     formErrors.email ? "border-red-300" : "border-gray-300"
                   } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                   placeholder="Enter your email"
@@ -197,7 +230,7 @@ export default function RegisterPage() {
                   type="password"
                   autoComplete="new-password"
                   required
-                  className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
+                  className={`mt-1 appearance-none relative block w-full px-3 py-3 border ${
                     formErrors.password ? "border-red-300" : "border-gray-300"
                   } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                   placeholder="Create a strong password"
@@ -227,7 +260,7 @@ export default function RegisterPage() {
                   type="password"
                   autoComplete="new-password"
                   required
-                  className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
+                  className={`mt-1 appearance-none relative block w-full px-3 py-3 border ${
                     formErrors.confirmPassword
                       ? "border-red-300"
                       : "border-gray-300"
@@ -243,23 +276,6 @@ export default function RegisterPage() {
                 )}
               </div>
             </div>
-
-            {error && (
-              <div className="rounded-md bg-blue-50 p-4">
-                <div className="flex">
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-blue-800">
-                      {error.includes("successful")
-                        ? "Success!"
-                        : "Registration Error"}
-                    </h3>
-                    <div className="mt-2 text-sm text-blue-700">
-                      <p>{error}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             <div>
               <button
@@ -292,9 +308,41 @@ export default function RegisterPage() {
                 )}
               </button>
             </div>
+            <p className="mt text-center text-sm text-gray-600">
+              Or{" "}
+              <Link
+                href="/auth/login"
+                className="font-medium text-indigo-600 hover:text-indigo-500">
+                sign in to your existing account
+              </Link>
+            </p>
           </form>
         </div>
       </div>
+
+      {/* Success Dialog */}
+      <Dialog
+        open={showSuccessDialog}
+        onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-green-600">
+              Registration Successful!
+            </DialogTitle>
+            <DialogDescription>
+              Your account has been created successfully. You can now sign in
+              with your new credentials.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={handleSuccessDialogClose}
+              className="w-full">
+              Continue to Login
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PublicRoute>
   );
 }

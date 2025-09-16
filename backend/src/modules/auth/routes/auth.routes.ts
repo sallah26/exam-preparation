@@ -1,19 +1,19 @@
 import { Router } from 'express';
 import { LoginController } from '../controllers/login.controller';
-import { authMiddleware, requireActiveAdmin } from '../middleware/auth.middleware';
-import { validateLoginInput } from '../validators/login.validator';
+import { authMiddleware, requireSuperAdmin, requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Public routes
-router.post('/login', validateLoginInput, LoginController.login);
-router.post('/refresh', LoginController.refreshToken);
+// Public routes (no authentication required)
+router.post('/login', LoginController.login); // Universal login
+router.post('/admin/login', LoginController.adminLogin); // Admin-specific login
+router.post('/user/login', LoginController.userLogin); // User-specific login
+router.post('/user/register', LoginController.userRegister); // User registration
 
-// Protected routes
-router.post('/logout', authMiddleware, LoginController.logout);
-router.get('/profile', authMiddleware, requireActiveAdmin, LoginController.getProfile);
-router.get('/sessions', authMiddleware, requireActiveAdmin, LoginController.getActiveSessions);
-router.delete('/sessions/:sessionId', authMiddleware, requireActiveAdmin, LoginController.revokeSession);
-router.delete('/sessions', authMiddleware, requireActiveAdmin, LoginController.revokeAllSessions);
+// Protected routes (authentication required)
+router.post('/refresh', authMiddleware, LoginController.refreshToken); // Token refresh (admin only)
+router.post('/logout', authMiddleware, LoginController.logout); // Logout
+router.get('/profile', authMiddleware, LoginController.getProfile); // Get current user profile
+router.get('/verify', authMiddleware, LoginController.verifyToken); // Verify token validity
 
 export default router; 

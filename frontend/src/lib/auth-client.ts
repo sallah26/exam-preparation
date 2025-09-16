@@ -14,11 +14,15 @@ interface DecodedToken {
 
 interface AuthUser {
   id: string;
+  fullName?: string; // For admins
+  name?: string;      // For users
   email: string;
-  fullName: string;
+  role: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
   isActive: boolean;
+  isSuperAdmin?: boolean; // For admin accounts
+  type?: 'user' | 'admin'; // Backend user type
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 // Client-side functions

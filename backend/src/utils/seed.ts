@@ -38,11 +38,9 @@ export const seedDatabase = async () => {
       },
     ];
 
-    const createdUsers = await prisma.user.createMany({
-      data: sampleUsers,
-    });
-
-    console.log(`✅ Successfully created ${createdUsers.count} users`);
+    // Note: Users should be created through the registration endpoint
+    // with proper password hashing, so we skip creating sample users here
+    console.log('⚠️  Skipping user creation - users should register through /api/auth/user/register');
     console.log('🎉 Database seeding completed!');
   } catch (error) {
     console.error('❌ Error seeding database:', error);

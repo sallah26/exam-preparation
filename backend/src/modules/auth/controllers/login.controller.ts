@@ -5,9 +5,9 @@ import { AuthenticationError } from '../utils/auth.errors';
 
 export class LoginController {
   /**
-   * Login admin and set secure cookies
+   * Admin login and set secure cookies
    */
-  static async login(req: Request, res: Response): Promise<void> {
+  static async adminLogin(req: Request, res: Response): Promise<void> {
     try {
       const { email, password } = req.body;
 
@@ -24,7 +24,7 @@ export class LoginController {
       // Return admin data and tokens (for frontend access)
       const responseData: any = {
         success: true,
-        message: 'Login successful',
+        message: 'Admin login successful',
         data: {
           admin: result.admin,
           tokens: {
@@ -59,16 +59,148 @@ export class LoginController {
   }
 
   /**
-   * Refresh access token
+   * User login and set secure cookies
+   */
+  static async userLogin(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password } = req.body;
+
+      // Authenticate user and get tokens
+      const result = await LoginService.authenticateUser({ email, password });
+
+      // Set secure HttpOnly cookie (access token only for users)
+      const accessTokenMaxAge = 15 * 60 * 1000; // 15 minutes
+      CookieService.setAccessTokenCookie(res, result.tokens.accessToken, accessTokenMaxAge);
+
+      // Return user data and tokens
+      const responseData: any = {
+        success: true,
+        message: 'User login successful',
+        data: {
+          user: result.user,
+          tokens: {
+            accessExpiresIn: result.tokens.accessExpiresIn,
+          },
+        },
+      };
+
+      // Include tokens in response body for development or when explicitly requested
+      const includeTokens = process.env.NODE_ENV === 'development' || req.query.includeTokens === 'true';
+      if (includeTokens) {
+        responseData.data.tokens.accessToken = result.tokens.accessToken;
+      }
+
+      res.status(200).json(responseData);
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        res.status(401).json({
+          success: false,
+          message: error.message,
+        });
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+      });
+    }
+  }
+
+  /**
+   * User registration
+   */
+  static async userRegister(req: Request, res: Response): Promise<void> {
+    try {
+      const { name, email, password } = req.body;
+
+      // Register user and get tokens
+      const result = await LoginService.registerUser({ name, email, password });
+
+      // Set secure HttpOnly cookie
+      const accessTokenMaxAge = 15 * 60 * 1000; // 15 minutes
+      CookieService.setAccessTokenCookie(res, result.tokens.accessToken, accessTokenMaxAge);
+
+      // Return user data and tokens
+      const responseData: any = {
+        success: true,
+        message: 'User registration successful',
+        data: {
+          user: result.user,
+          tokens: {
+            accessExpiresIn: result.tokens.accessExpiresIn,
+          },
+        },
+      };
+
+      // Include tokens in response body for development or when explicitly requested
+      const includeTokens = process.env.NODE_ENV === 'development' || req.query.includeTokens === 'true';
+      if (includeTokens) {
+        responseData.data.tokens.accessToken = result.tokens.accessToken;
+      }
+
+      res.status(201).json(responseData);
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+      });
+    }
+  }
+
+  /**
+   * Universal login - detects whether it's admin or user based on email
+   */
+  static async login(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password } = req.body;
+
+      // First check if this email belongs to an admin
+      const { prisma } = await import('../../../prisma/client');
+      const admin = await prisma.admin.findUnique({
+        where: { email: email.toLowerCase() },
+        select: { id: true },
+      });
+
+      if (admin) {
+        // Use admin login
+        await LoginController.adminLogin(req, res);
+      } else {
+        // Use user login
+        await LoginController.userLogin(req, res);
+      }
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+      });
+    }
+  }
+
+  /**
+   * Refresh access token (admin only)
    */
   static async refreshToken(req: Request, res: Response): Promise<void> {
     try {
-      const refreshToken = req.cookies?.['refreshToken'];
+      // Get refresh token from cookie or body
+      let refreshToken = req.cookies?.['refreshToken'];
+      
+      if (!refreshToken && req.body.refreshToken) {
+        refreshToken = req.body.refreshToken;
+      }
 
       if (!refreshToken) {
         res.status(401).json({
           success: false,
-          message: 'Refresh token not provided',
+          message: 'Refresh token required',
         });
         return;
       }
@@ -80,13 +212,24 @@ export class LoginController {
       const accessTokenMaxAge = 15 * 60 * 1000; // 15 minutes
       CookieService.setAccessTokenCookie(res, result.accessToken, accessTokenMaxAge);
 
-      res.status(200).json({
+      // Return new access token
+      const responseData: any = {
         success: true,
         message: 'Token refreshed successfully',
         data: {
-          expiresIn: result.expiresIn,
+          tokens: {
+            accessExpiresIn: result.expiresIn,
+          },
         },
-      });
+      };
+
+      // Include token in response body for development
+      const includeTokens = process.env.NODE_ENV === 'development' || req.query.includeTokens === 'true';
+      if (includeTokens) {
+        responseData.data.tokens.accessToken = result.accessToken;
+      }
+
+      res.status(200).json(responseData);
     } catch (error) {
       if (error instanceof AuthenticationError) {
         res.status(401).json({
@@ -104,28 +247,30 @@ export class LoginController {
   }
 
   /**
-   * Logout admin and clear cookies
+   * Logout (revoke refresh token)
    */
   static async logout(req: Request, res: Response): Promise<void> {
     try {
-      const adminId = (req as any).admin?.adminId;
+      // Get refresh token from cookie
       const refreshToken = req.cookies?.['refreshToken'];
 
-      if (adminId) {
-        // Revoke refresh token if available
-        await LoginService.logoutAdmin(adminId, refreshToken);
+      if (refreshToken) {
+        // Revoke refresh token from database
+        await LoginService.logoutAdmin(refreshToken);
       }
 
-      // Clear all auth cookies
-      CookieService.clearAllAuthCookies(res);
+      // Clear cookies
+      CookieService.clearAccessTokenCookie(res);
+      CookieService.clearRefreshTokenCookie(res);
 
       res.status(200).json({
         success: true,
         message: 'Logout successful',
       });
     } catch (error) {
-      // Even if logout fails, clear cookies
-      CookieService.clearAllAuthCookies(res);
+      // Clear cookies even if there's an error
+      CookieService.clearAccessTokenCookie(res);
+      CookieService.clearRefreshTokenCookie(res);
 
       res.status(200).json({
         success: true,
@@ -135,65 +280,33 @@ export class LoginController {
   }
 
   /**
-   * Get admin profile
+   * Get current user profile
    */
   static async getProfile(req: Request, res: Response): Promise<void> {
     try {
-      const adminId = (req as any).admin?.adminId;
+      const user = req.user;
 
-      if (!adminId) {
+      if (!user) {
         res.status(401).json({
           success: false,
-          message: 'Unauthorized',
+          message: 'User not authenticated',
         });
         return;
       }
-
-      const admin = await LoginService.getAdminProfile(adminId);
 
       res.status(200).json({
         success: true,
+        message: 'Profile retrieved successfully',
         data: {
-          admin,
-        },
-      });
-    } catch (error) {
-      if (error instanceof AuthenticationError) {
-        res.status(404).json({
-          success: false,
-          message: error.message,
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-      });
-    }
-  }
-
-  /**
-   * Get active sessions for admin
-   */
-  static async getActiveSessions(req: Request, res: Response): Promise<void> {
-    try {
-      const adminId = (req as any).admin?.adminId;
-
-      if (!adminId) {
-        res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-        return;
-      }
-
-      const sessions = await LoginService.getActiveSessions(adminId);
-
-      res.status(200).json({
-        success: true,
-        data: {
-          sessions,
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            isActive: user.isActive,
+            type: user.type,
+            ...(user.isSuperAdmin !== undefined && { isSuperAdmin: user.isSuperAdmin }),
+          },
         },
       });
     } catch (error) {
@@ -205,71 +318,34 @@ export class LoginController {
   }
 
   /**
-   * Revoke specific session
+   * Verify token validity
    */
-  static async revokeSession(req: Request, res: Response): Promise<void> {
+  static async verifyToken(req: Request, res: Response): Promise<void> {
     try {
-      const adminId = (req as any).admin?.adminId;
-      const { sessionId } = req.params;
+      const user = req.user;
 
-      if (!adminId) {
+      if (!user) {
         res.status(401).json({
           success: false,
-          message: 'Unauthorized',
+          message: 'Invalid token',
+          data: { valid: false },
         });
         return;
       }
-
-      if (!sessionId) {
-        res.status(400).json({
-          success: false,
-          message: 'Session ID is required',
-        });
-        return;
-      }
-
-      await LoginService.revokeSession(adminId, sessionId);
 
       res.status(200).json({
         success: true,
-        message: 'Session revoked successfully',
-      });
-    } catch (error) {
-      if (error instanceof AuthenticationError) {
-        res.status(404).json({
-          success: false,
-          message: error.message,
-        });
-        return;
-      }
-
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-      });
-    }
-  }
-
-  /**
-   * Revoke all sessions for admin
-   */
-  static async revokeAllSessions(req: Request, res: Response): Promise<void> {
-    try {
-      const adminId = (req as any).admin?.adminId;
-
-      if (!adminId) {
-        res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-        return;
-      }
-
-      await LoginService.logoutAdmin(adminId);
-
-      res.status(200).json({
-        success: true,
-        message: 'All sessions revoked successfully',
+        message: 'Token is valid',
+        data: {
+          valid: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            type: user.type,
+          },
+        },
       });
     } catch (error) {
       res.status(500).json({

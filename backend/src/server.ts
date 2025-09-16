@@ -4,11 +4,13 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import userRoutes from './routes/userRoutes';
 import adminRoutes from './routes/adminRoutes';
+import superAdminRoutes from './routes/superAdminRoutes';
 import authRoutes from './modules/auth/routes/auth.routes';
 import examRoutes from './routes/examRoutes';
 import studentRoutes from './routes/studentRoutes';
 import { errorHandler } from './middlewares/errorHandler';
 import { TokenCleanupService } from './modules/auth/services/token-cleanup.service';
+import { SuperAdminInitService } from './services/superAdminInit.service';
 
 const app = express();
 const PORT = process.env['PORT'] || 5000;
@@ -48,6 +50,7 @@ app.get('/health', (_req, res) => {
 // API routes
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/exam', examRoutes);
 app.use('/api/student', studentRoutes);
@@ -63,16 +66,24 @@ app.use('*', (_req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env['NODE_ENV'] || 'development'}`);
   console.log(`📊 Health Check: http://localhost:${PORT}/health`);
   console.log(`👥 Users API: http://localhost:${PORT}/api/users`);
   console.log(`👨‍💼 Admin API: http://localhost:${PORT}/api/admin`);
+  console.log(`🦸‍♂️ Super Admin API: http://localhost:${PORT}/api/super-admin`);
   console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
   console.log(`📚 Exam Portal Admin: http://localhost:${PORT}/api/admin/exam`);
   console.log(`🎓 Student Portal: http://localhost:${PORT}/api/student`);
   console.log(`🍪 Cookie-based authentication enabled`);
+  
+  // Initialize default super admin
+  try {
+    await SuperAdminInitService.initializeDefaultSuperAdmin();
+  } catch (error) {
+    console.error('Failed to initialize super admin:', error);
+  }
   
   // Start token cleanup service
   TokenCleanupService.startCleanup();
