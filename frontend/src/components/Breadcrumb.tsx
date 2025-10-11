@@ -24,7 +24,7 @@ export default function Breadcrumb({ items, className = "" }: BreadcrumbProps) {
   };
 
   return (
-    <div className={`bg-white ${className}`}>
+    <div className={`border-b ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <nav
           className="flex"
