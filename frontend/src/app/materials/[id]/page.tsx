@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { studentExamApi } from "@/lib/exam-api";
 import { Material, MaterialType, Question } from "@/types/exam";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import Breadcrumb from "@/components/Breadcrumb";
+import { generateBreadcrumbItems } from "@/utils/breadcrumb-utils";
 
 export default function MaterialPage() {
   const router = useRouter();
@@ -401,6 +403,11 @@ export default function MaterialPage() {
     );
   };
 
+  // Generate breadcrumb items
+  const breadcrumbItems = generateBreadcrumbItems({
+    material: material || undefined,
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -486,6 +493,9 @@ export default function MaterialPage() {
           </div>
         </div>
       </header>
+
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

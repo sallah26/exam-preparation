@@ -5,6 +5,9 @@ import { useRouter, useParams } from "next/navigation";
 import { studentExamApi } from "@/lib/exam-api";
 import { Department } from "@/types/exam";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import Navbar from "@/components/navbar";
+import Breadcrumb from "@/components/Breadcrumb";
+import { generateBreadcrumbItems } from "@/utils/breadcrumb-utils";
 
 export default function ExamTypePage() {
   const router = useRouter();
@@ -15,6 +18,7 @@ export default function ExamTypePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [examTypeName, setExamTypeName] = useState<string>("");
+  const [examTypeIdState, setExamTypeIdState] = useState<string>("");
 
   useEffect(() => {
     if (examTypeId) {
@@ -31,6 +35,7 @@ export default function ExamTypePage() {
         // Get exam type name from first department if available
         if (response.data.length > 0) {
           setExamTypeName(response.data[0].examType?.name || "Exam Type");
+          setExamTypeIdState(response.data[0].examType?.id || examTypeId);
         }
       } else {
         setError(response.message);
@@ -50,95 +55,32 @@ export default function ExamTypePage() {
     router.back();
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <button
-                onClick={handleBackClick}
-                className="mr-4 p-2 text-gray-600 hover:text-gray-900 rounded-md">
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-              </button>
-              <h1 className="text-2xl font-bold text-gray-900">
-                📚 {examTypeName}
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => router.push("/auth/login")}
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
-                Login
-              </button>
-              <button
-                onClick={() => router.push("/auth/register")}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                Register
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+  // Generate breadcrumb items
+  const breadcrumbItems = generateBreadcrumbItems({
+    examType:
+      examTypeIdState && examTypeName
+        ? {
+            id: examTypeIdState,
+            name: examTypeName,
+            description: "",
+            createdAt: "",
+            updatedAt: "",
+            departments: departments,
+          }
+        : undefined,
+  });
 
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50/30 to-indigo-400/50">
       {/* Breadcrumb */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <nav
-            className="flex"
-            aria-label="Breadcrumb">
-            <ol className="flex items-center space-x-4">
-              <li>
-                <button
-                  onClick={() => router.push("/")}
-                  className="text-gray-500 hover:text-gray-700">
-                  <span className="sr-only">Home</span>
-                  <svg
-                    className="h-5 w-5"
-                    fill="currentColor"
-                    viewBox="0 0 20 20">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                  </svg>
-                </button>
-              </li>
-              <li>
-                <div className="flex items-center">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="currentColor"
-                    viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span className="ml-4 text-sm font-medium text-gray-900">
-                    {examTypeName}
-                  </span>
-                </div>
-              </li>
-            </ol>
-          </nav>
-        </div>
-      </div>
+      <Breadcrumb items={breadcrumbItems} />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">Departments</h2>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Available Departments
+          </h2>
           <p className="text-lg text-gray-600">
             Choose a department to explore study materials and resources.
           </p>

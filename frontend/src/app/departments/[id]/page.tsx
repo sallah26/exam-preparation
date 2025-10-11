@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { studentExamApi } from "@/lib/exam-api";
 import { AcademicPeriod } from "@/types/exam";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import Breadcrumb from "@/components/Breadcrumb";
+import { generateBreadcrumbItems } from "@/utils/breadcrumb-utils";
 
 export default function DepartmentPage() {
   const router = useRouter();
@@ -16,6 +18,8 @@ export default function DepartmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [departmentName, setDepartmentName] = useState<string>("");
   const [examTypeName, setExamTypeName] = useState<string>("");
+  const [departmentIdState, setDepartmentIdState] = useState<string>("");
+  const [examTypeId, setExamTypeId] = useState<string>("");
 
   useEffect(() => {
     if (departmentId) {
@@ -32,6 +36,8 @@ export default function DepartmentPage() {
         if (response.data.length > 0) {
           setDepartmentName(response.data[0].department?.name || "Department");
           setExamTypeName(response.data[0].department?.examType?.name || "");
+          setDepartmentIdState(response.data[0].department?.id || departmentId);
+          setExamTypeId(response.data[0].department?.examType?.id || "");
         }
       } else {
         setError(response.message);
@@ -46,6 +52,32 @@ export default function DepartmentPage() {
   const handlePeriodClick = (periodId: string) => {
     router.push(`/periods/${periodId}`);
   };
+
+  // Generate breadcrumb items
+  const breadcrumbItems = generateBreadcrumbItems({
+    examType:
+      examTypeId && examTypeName
+        ? {
+            id: examTypeId,
+            name: examTypeName,
+            description: "",
+            createdAt: "",
+            updatedAt: "",
+            departments: [],
+          }
+        : undefined,
+    department:
+      departmentIdState && departmentName
+        ? {
+            id: departmentIdState,
+            name: departmentName,
+            examTypeId: examTypeId,
+            createdAt: "",
+            updatedAt: "",
+            academicPeriods: academicPeriods,
+          }
+        : undefined,
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -91,65 +123,7 @@ export default function DepartmentPage() {
       </header>
 
       {/* Breadcrumb */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <nav
-            className="flex"
-            aria-label="Breadcrumb">
-            <ol className="flex items-center space-x-4">
-              <li>
-                <button
-                  onClick={() => router.push("/")}
-                  className="text-gray-500 hover:text-gray-700">
-                  <span className="sr-only">Home</span>
-                  <svg
-                    className="h-5 w-5"
-                    fill="currentColor"
-                    viewBox="0 0 20 20">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                  </svg>
-                </button>
-              </li>
-              {examTypeName && (
-                <li>
-                  <div className="flex items-center">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="currentColor"
-                      viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span className="ml-4 text-sm font-medium text-gray-500">
-                      {examTypeName}
-                    </span>
-                  </div>
-                </li>
-              )}
-              <li>
-                <div className="flex items-center">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="currentColor"
-                    viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span className="ml-4 text-sm font-medium text-gray-900">
-                    {departmentName}
-                  </span>
-                </div>
-              </li>
-            </ol>
-          </nav>
-        </div>
-      </div>
+      <Breadcrumb items={breadcrumbItems} />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

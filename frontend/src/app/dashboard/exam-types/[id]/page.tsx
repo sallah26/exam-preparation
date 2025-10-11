@@ -439,7 +439,7 @@ export default function ExamTypeManagePage() {
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
+                      <h3 className="text-xl font-semibold text-gray-900">
                         {department.name}
                       </h3>
                     </div>
