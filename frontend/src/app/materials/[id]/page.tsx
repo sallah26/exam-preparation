@@ -21,6 +21,9 @@ export default function MaterialPage() {
     [key: string]: string;
   }>({});
   const [showAnswers, setShowAnswers] = useState(false);
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(
+    new Set()
+  );
 
   useEffect(() => {
     if (materialId) {
@@ -411,6 +414,46 @@ export default function MaterialPage() {
     );
   };
 
+  const getQuestionStatus = (index: number) => {
+    if (index === currentQuestionIndex) return "current";
+    if (
+      material?.questions?.[index]?.id &&
+      selectedAnswers[material.questions[index].id]
+    )
+      return "answered";
+    if (flaggedQuestions.has(index)) return "flagged";
+    return "unanswered";
+  };
+
+  const getQuestionButtonClass = (index: number) => {
+    const status = getQuestionStatus(index);
+    const baseClass =
+      "w-8 h-8 text-sm font-medium rounded border transition-colors";
+
+    switch (status) {
+      case "current":
+        return `${baseClass} bg-blue-600 text-white border-blue-600`;
+      case "answered":
+        return `${baseClass} bg-green-600 text-white border-green-600`;
+      case "flagged":
+        return `${baseClass} bg-red-600 text-white border-red-600`;
+      default:
+        return `${baseClass} bg-gray-200 text-gray-700 border-gray-300 hover:bg-gray-300`;
+    }
+  };
+
+  const toggleFlag = () => {
+    setFlaggedQuestions((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(currentQuestionIndex)) {
+        newSet.delete(currentQuestionIndex);
+      } else {
+        newSet.add(currentQuestionIndex);
+      }
+      return newSet;
+    });
+  };
+
   const renderQuestionViewer = () => {
     if (!material?.questions || material.questions.length === 0) {
       return null;
@@ -418,24 +461,260 @@ export default function MaterialPage() {
 
     const currentQuestion = material.questions[currentQuestionIndex];
     const totalQuestions = material.questions.length;
+    const answeredCount = material.questions.filter(
+      (q) => selectedAnswers[q.id]
+    ).length;
 
     return (
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-        {/* Question Header */}
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-5 border-b border-gray-100">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-indigo-200">
-                <span className="text-sm font-semibold text-indigo-600">
-                  Question {currentQuestionIndex + 1} of {totalQuestions}
+      <div className="min-h-screen bg-white">
+        {/* Header
+        <div className="border-b border-gray-200 px-6 py-4 bg-white">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div>
+              <div className="text-sm text-gray-500 mb-1">
+                {material.academicPeriod?.department?.examType?.name} /{" "}
+                {material.academicPeriod?.department?.name}
+              </div>
+              <h1 className="text-xl font-semibold text-gray-900">
+                {material.title}
+              </h1>
+            </div>
+          </div>
+        </div> */}
+        {/* Main Content */}
+        <div className="flex mt-10 max-w-7xl mx-auto gap-7">
+          {/* Left Sidebar */}
+          <div className="w-80 bg-gray-50 border p-6 h-fit shadow-lg rounded-2xl">
+            {/* Practice Mode Header */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Practice Mode
+                </h2>
+                {!showAnswers ? (
+                  <button
+                    onClick={() => setShowAnswers(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm rounded-lg transition-colors">
+                    Show Answers
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowAnswers(false)}
+                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 text-sm rounded-lg transition-colors">
+                    Hide Answers
+                  </button>
+                )}
+              </div>
+              <p className="text-sm text-gray-600">
+                {answeredCount} of {totalQuestions} answered
+              </p>
+            </div>
+
+            {/* Questions Grid */}
+            <div className="mb-6">
+              <h3 className="text-base font-medium mb-4 text-gray-900">
+                Questions
+              </h3>
+              <div className="grid grid-cols-10 gap-1 mb-6">
+                {material.questions.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentQuestionIndex(index)}
+                    className={getQuestionButtonClass(index)}>
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 bg-blue-600 rounded-full"></div>
+                <span className="text-sm text-gray-700">Current Question</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 bg-green-600 rounded-full"></div>
+                <span className="text-sm text-gray-700">Answered</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 bg-gray-300 rounded-full"></div>
+                <span className="text-sm text-gray-700">Unanswered</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 bg-red-600 rounded-full"></div>
+                <span className="text-sm text-gray-700">
+                  Flagged (Click flag button)
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {!showAnswers && (
+
+            {/* Score Display */}
+            {showAnswers && (
+              <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">
+                    Your Score:
+                  </span>
+                  <span className="text-2xl font-bold text-indigo-600">
+                    {calculateScore()}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Finish Exam Button */}
+            <button
+              onClick={() => {
+                setShowAnswers(true);
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Finish & Review
+            </button>
+          </div>
+
+          {/* Main Question Area */}
+          <div className="flex-1 p-8 bg-white border shadow-lg rounded-2xl">
+            <div className="max-w-4xl">
+              {/* Question Header */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-gray-600 text-sm">
+                    Question {currentQuestionIndex + 1} of {totalQuestions}
+                  </p>
+                  <button
+                    onClick={toggleFlag}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      flaggedQuestions.has(currentQuestionIndex)
+                        ? "bg-red-100 text-red-700 border border-red-300"
+                        : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
+                    }`}>
+                    <svg
+                      className="w-4 h-4 inline mr-2"
+                      fill={
+                        flaggedQuestions.has(currentQuestionIndex)
+                          ? "currentColor"
+                          : "none"
+                      }
+                      viewBox="0 0 24 24"
+                      stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"
+                      />
+                    </svg>
+                    {flaggedQuestions.has(currentQuestionIndex)
+                      ? "Unflag"
+                      : "Flag"}
+                  </button>
+                </div>
+                <h2 className="text-xl font-medium text-gray-900 mb-8 leading-relaxed">
+                  {currentQuestion.questionText}
+                </h2>
+              </div>
+
+              {/* Answer Options */}
+              <div className="space-y-4 mb-8">
+                {currentQuestion.options.map((option, idx) => {
+                  const isSelected =
+                    selectedAnswers[currentQuestion.id] === option.id;
+                  const isCorrect = option.isCorrect;
+                  const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D
+
+                  let buttonClass =
+                    "w-full text-left p-4 rounded-lg border transition-colors ";
+
+                  if (showAnswers) {
+                    if (isCorrect) {
+                      buttonClass +=
+                        "bg-green-50 border-green-500 text-gray-900";
+                    } else if (isSelected && !isCorrect) {
+                      buttonClass += "bg-red-50 border-red-500 text-gray-900";
+                    } else {
+                      buttonClass += "bg-white border-gray-200 text-gray-600";
+                    }
+                  } else {
+                    if (isSelected) {
+                      buttonClass += "bg-blue-50 border-blue-500 text-gray-900";
+                    } else {
+                      buttonClass +=
+                        "bg-white border-gray-200 text-gray-700 hover:bg-gray-50";
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() =>
+                        !showAnswers &&
+                        handleAnswerSelect(currentQuestion.id, option.id)
+                      }
+                      disabled={showAnswers}
+                      className={buttonClass}>
+                      <div className="flex gap-4">
+                        <span
+                          className={`font-medium ${
+                            showAnswers && isCorrect
+                              ? "text-green-600"
+                              : showAnswers && isSelected && !isCorrect
+                              ? "text-red-600"
+                              : isSelected
+                              ? "text-blue-600"
+                              : "text-gray-500"
+                          }`}>
+                          {optionLetter}
+                        </span>
+                        <span className="flex-1">{option.optionText}</span>
+                        {showAnswers && isCorrect && (
+                          <svg
+                            className="w-5 h-5 text-green-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Help Buttons */}
+              {currentQuestion.explanation && showAnswers && (
+                <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Explanation:
+                  </h4>
+                  <p className="text-gray-700">{currentQuestion.explanation}</p>
+                </div>
+              )}
+
+              {/* Navigation */}
+              <div className="flex justify-between items-center">
                 <button
-                  onClick={() => setShowAnswers(true)}
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2">
+                  onClick={handlePrevQuestion}
+                  disabled={currentQuestionIndex === 0}
+                  className="text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 px-4 py-2">
                   <svg
                     className="w-4 h-4"
                     fill="none"
@@ -445,155 +724,33 @@ export default function MaterialPage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      d="M15 19l-7-7 7-7"
                     />
                   </svg>
-                  Show Answers
+                  Previous
                 </button>
-              )}
-              {showAnswers && (
-                <div className="bg-white px-5 py-2 rounded-lg shadow-sm border border-gray-200">
-                  <span className="text-sm font-semibold text-gray-900">
-                    Score:{" "}
-                    <span className="text-indigo-600">{calculateScore()}%</span>
-                  </span>
-                </div>
-              )}
+
+                <button
+                  onClick={handleNextQuestion}
+                  disabled={currentQuestionIndex === totalQuestions - 1}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                  Next
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Question Content */}
-        <div className="p-8">
-          <h4 className="text-xl font-semibold text-gray-900 mb-8 leading-relaxed">
-            {currentQuestion.questionText}
-          </h4>
-
-          <div className="space-y-3">
-            {currentQuestion.options.map((option) => {
-              const isSelected =
-                selectedAnswers[currentQuestion.id] === option.id;
-              const isCorrect = option.isCorrect;
-
-              let optionClasses =
-                "w-full text-left p-5 rounded-xl border-2 transition-all duration-200 ";
-
-              if (showAnswers) {
-                if (isCorrect) {
-                  optionClasses +=
-                    "border-green-500 bg-green-50 text-green-900 shadow-sm";
-                } else if (isSelected && !isCorrect) {
-                  optionClasses +=
-                    "border-red-500 bg-red-50 text-red-900 shadow-sm";
-                } else {
-                  optionClasses += "border-gray-200 bg-gray-50 text-gray-600";
-                }
-              } else {
-                if (isSelected) {
-                  optionClasses +=
-                    "border-indigo-500 bg-indigo-50 text-indigo-900 shadow-md";
-                } else {
-                  optionClasses +=
-                    "border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30 cursor-pointer";
-                }
-              }
-
-              return (
-                <button
-                  key={option.id}
-                  onClick={() =>
-                    !showAnswers &&
-                    handleAnswerSelect(currentQuestion.id, option.id)
-                  }
-                  className={optionClasses}
-                  disabled={showAnswers}>
-                  <div className="flex items-center">
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 mr-4 flex-shrink-0 flex items-center justify-center ${
-                        isSelected ? "border-current" : "border-gray-400"
-                      }`}>
-                      {isSelected && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-current"></div>
-                      )}
-                    </div>
-                    <span className="flex-1 text-base">
-                      {option.optionText}
-                    </span>
-                    {showAnswers && isCorrect && (
-                      <div className="ml-3 bg-green-600 rounded-full p-1">
-                        <svg
-                          className="h-5 w-5 text-white"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={3}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-5 border-t border-gray-200 flex justify-between items-center flex-wrap gap-4">
-          <button
-            onClick={handlePrevQuestion}
-            disabled={currentQuestionIndex === 0}
-            className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 shadow-sm hover:shadow-md flex items-center gap-2">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            Previous
-          </button>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {material.questions.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentQuestionIndex(index)}
-                className={`w-10 h-10 rounded-full text-sm font-semibold transition-all duration-300 ${
-                  index === currentQuestionIndex
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md scale-110"
-                    : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300 hover:border-indigo-300"
-                }`}>
-                {index + 1}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={handleNextQuestion}
-            disabled={currentQuestionIndex === totalQuestions - 1}
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2">
-            Next
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
         </div>
       </div>
     );
@@ -614,7 +771,7 @@ export default function MaterialPage() {
 
   if (error || !material) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen min-h-[calc(100vh-82px)] bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center py-12">
             <div className="text-red-600 mb-4">
@@ -646,45 +803,20 @@ export default function MaterialPage() {
     );
   }
 
+  // If material has questions, show the full exam interface
+  if (material.questions && material.questions.length > 0) {
+    return renderQuestionViewer();
+  }
+
+  // Otherwise show the normal page layout with documents
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen min-h-[calc(100vh-82px)] bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Breadcrumb */}
       <Breadcrumb items={breadcrumbItems} />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="space-y-12">
-          {/* Questions Section */}
-          {material.questions && material.questions.length > 0 && (
-            <div>
-              <div className="mb-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="bg-indigo-600 p-2 rounded-lg">
-                    <svg
-                      className="w-6 h-6 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    Practice Questions
-                  </h2>
-                </div>
-                <p className="text-gray-600 ml-14">
-                  Test your knowledge with these multiple choice questions
-                </p>
-              </div>
-              {renderQuestionViewer()}
-            </div>
-          )}
-
           {/* Documents Section */}
           {material.documents && material.documents.length > 0 && (
             <div>
@@ -717,31 +849,30 @@ export default function MaterialPage() {
           )}
 
           {/* Empty State */}
-          {(!material.questions || material.questions.length === 0) &&
-            (!material.documents || material.documents.length === 0) && (
-              <div className="bg-white rounded-xl shadow-lg p-12 text-center border border-gray-100">
-                <div className="text-gray-400 mb-4">
-                  <svg
-                    className="mx-auto h-20 w-20"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  No content available
-                </h3>
-                <p className="text-gray-600">
-                  This material doesn't have any content yet.
-                </p>
+          {(!material.documents || material.documents.length === 0) && (
+            <div className="bg-white rounded-xl shadow-lg p-12 text-center border border-gray-100">
+              <div className="text-gray-400 mb-4">
+                <svg
+                  className="mx-auto h-20 w-20"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                  />
+                </svg>
               </div>
-            )}
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                No content available
+              </h3>
+              <p className="text-gray-600">
+                This material doesn't have any content yet.
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>

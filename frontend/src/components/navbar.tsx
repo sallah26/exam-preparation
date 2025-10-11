@@ -1,11 +1,19 @@
 "use client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import React from "react";
 
 export default function Navbar() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  console.log("isAuthenticated", isAuthenticated);
   return (
-    <header className="bg-white/50 backdrop-blur-md shadow-sm border-b border-border/50 sticky top-0 z-[12121212]">
+    <header
+      className={`${
+        isAuthenticated
+          ? "hidden"
+          : "bg-white/50 backdrop-blur-md shadow-sm border-b border-border/50 sticky top-0 z-[12121212]"
+      }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           <div className="flex items-center">

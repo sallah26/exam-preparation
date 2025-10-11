@@ -355,7 +355,7 @@ export default function PeriodPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen min-h-[calc(100vh-82px)] bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Breadcrumb */}
       <Breadcrumb items={breadcrumbItems} />
 
