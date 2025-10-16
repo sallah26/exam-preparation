@@ -1,130 +1,183 @@
-import { AdminUser, CreateAdminData } from '@/types/auth';
+import { getAuthJwtClient } from './auth-client';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-class SuperAdminApiService {
-  private async makeRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<{ success: boolean; data?: T; message: string }> {
+interface ApiResponse<T = any> {
+  success: boolean;
+  message?: string;
+  data?: T;
+  temporaryPassword?: string;
+}
+
+export interface Admin {
+  id: string;
+  fullName: string;
+  email: string;
+  isActive: boolean;
+  isSuperAdmin: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+  creator?: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+}
+
+export interface AdminStats {
+  total: number;
+  active: number;
+  inactive: number;
+  superAdmins: number;
+}
+
+export interface InviteAdminInput {
+  fullName: string;
+  email: string;
+}
+
+class SuperAdminApi {
+  private getHeaders(): HeadersInit {
+    const { token } = getAuthJwtClient();
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
+  /**
+   * Invite a new admin
+   */
+  async inviteAdmin(input: InviteAdminInput): Promise<ApiResponse<{ admin: Admin; temporaryPassword?: string }>> {
     try {
-      const url = `${API_BASE_URL}${endpoint}`;
-      
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE_URL}/super-admin/invite`, {
+        method: 'POST',
+        headers: this.getHeaders(),
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        ...options,
+        body: JSON.stringify(input),
       });
 
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('API request failed:', error);
+      console.error('Failed to invite admin:', error);
       return {
         success: false,
-        message: 'Network error occurred',
+        message: 'Failed to invite admin. Please try again.',
       };
     }
   }
 
-  // Admin Management
-  async getAllAdmins(): Promise<{ success: boolean; data?: AdminUser[]; message: string }> {
-    const response = await this.makeRequest<{ admins: AdminUser[] }>('/api/super-admin/admins');
-    
-    // Extract the admins array from the nested structure
-    if (response.success && response.data?.admins) {
+  /**
+   * Get all admins
+   */
+  async getAllAdmins(): Promise<ApiResponse<Admin[]>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/super-admin/admins`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch admins:', error);
       return {
-        success: response.success,
-        data: response.data.admins,
-        message: response.message
+        success: false,
+        message: 'Failed to fetch admins. Please try again.',
       };
     }
-    
-    return {
-      success: response.success,
-      data: [],
-      message: response.message
-    };
   }
 
-  async getAdminDetails(adminId: string): Promise<{ success: boolean; data?: AdminUser; message: string }> {
-    return this.makeRequest<AdminUser>(`/api/super-admin/admins/${adminId}`);
+  /**
+   * Get admin by ID
+   */
+  async getAdminById(adminId: string): Promise<ApiResponse<Admin>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/super-admin/admins/${adminId}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch admin:', error);
+      return {
+        success: false,
+        message: 'Failed to fetch admin details. Please try again.',
+      };
+    }
   }
 
-  async createAdmin(adminData: CreateAdminData): Promise<{ success: boolean; data?: AdminUser; message: string }> {
-    return this.makeRequest<AdminUser>('/api/super-admin/admins', {
-      method: 'POST',
-      body: JSON.stringify(adminData),
-    });
+  /**
+   * Toggle admin status (activate/deactivate)
+   */
+  async toggleAdminStatus(adminId: string): Promise<ApiResponse<{ admin: Admin }>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/super-admin/admins/${adminId}/toggle-status`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to toggle admin status:', error);
+      return {
+        success: false,
+        message: 'Failed to update admin status. Please try again.',
+      };
+    }
   }
 
-  async updateAdmin(
-    adminId: string, 
-    updates: Partial<CreateAdminData & { isActive: boolean }>
-  ): Promise<{ success: boolean; data?: AdminUser; message: string }> {
-    return this.makeRequest<AdminUser>(`/api/super-admin/admins/${adminId}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
+  /**
+   * Delete admin
+   */
+  async deleteAdmin(adminId: string): Promise<ApiResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/super-admin/admins/${adminId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to delete admin:', error);
+      return {
+        success: false,
+        message: 'Failed to delete admin. Please try again.',
+      };
+    }
   }
 
-  async deleteAdmin(adminId: string): Promise<{ success: boolean; message: string }> {
-    return this.makeRequest(`/api/super-admin/admins/${adminId}`, {
-      method: 'DELETE',
-    });
-  }
+  /**
+   * Get admin statistics
+   */
+  async getAdminStats(): Promise<ApiResponse<AdminStats>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/super-admin/stats`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include',
+      });
 
-  // User Management
-  async getAllUsers(params?: { 
-    page?: number; 
-    limit?: number; 
-    search?: string 
-  }): Promise<{ 
-    success: boolean; 
-    data?: { 
-      users: any[]; 
-      pagination: { page: number; limit: number; total: number; pages: number } 
-    }; 
-    message: string 
-  }> {
-    const query = new URLSearchParams();
-    if (params?.page) query.append('page', params.page.toString());
-    if (params?.limit) query.append('limit', params.limit.toString());
-    if (params?.search) query.append('search', params.search);
-
-    const queryString = query.toString();
-    const endpoint = `/api/super-admin/users${queryString ? `?${queryString}` : ''}`;
-    
-    return this.makeRequest(endpoint);
-  }
-
-  async updateUserStatus(
-    userId: string, 
-    isActive: boolean
-  ): Promise<{ success: boolean; data?: any; message: string }> {
-    return this.makeRequest(`/api/super-admin/users/${userId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ isActive }),
-    });
-  }
-
-  // System Statistics
-  async getSystemStats(): Promise<{ 
-    success: boolean; 
-    data?: {
-      stats: {
-        admins: { total: number; active: number; superAdmins: number };
-        users: { total: number; active: number };
-        content: { examTypes: number; departments: number; materials: number };
-      }
-    }; 
-    message: string 
-  }> {
-    return this.makeRequest('/api/super-admin/stats');
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch admin stats:', error);
+      return {
+        success: false,
+        message: 'Failed to fetch statistics. Please try again.',
+      };
+    }
   }
 }
 
-export const superAdminApi = new SuperAdminApiService(); 
+export const superAdminApi = new SuperAdminApi();

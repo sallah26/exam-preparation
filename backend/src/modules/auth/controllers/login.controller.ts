@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { LoginService } from '../services/login.service';
 import { CookieService } from '../services/cookie.service';
 import { AuthenticationError } from '../utils/auth.errors';
+import { EmailService } from '../../../services/email.service';
 
 export class LoginController {
   /**
@@ -116,6 +117,20 @@ export class LoginController {
 
       // Register user and get tokens
       const result = await LoginService.registerUser({ name, email, password });
+
+      // Send welcome email (don't wait for it)
+      const loginUrl = process.env.FRONTEND_URL 
+        ? `${process.env.FRONTEND_URL}/auth/login`
+        : 'http://localhost:3000/auth/login';
+      
+      EmailService.sendWelcomeEmail({
+        name,
+        email,
+        loginUrl,
+      }).catch(error => {
+        console.error('Failed to send welcome email:', error);
+        // Don't fail registration if email fails
+      });
 
       // Set secure HttpOnly cookie
       const accessTokenMaxAge = 15 * 60 * 1000; // 15 minutes

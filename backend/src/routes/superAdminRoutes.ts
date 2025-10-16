@@ -10,6 +10,7 @@ router.use(requireSuperAdmin);
 // Admin management routes
 router.get('/admins', SuperAdminController.getAllAdmins);
 router.post('/admins', SuperAdminController.addAdmin);
+router.post('/invite', SuperAdminController.inviteAdmin); // New invitation endpoint
 router.get('/admins/:adminId', SuperAdminController.getAdminDetails);
 router.put('/admins/:adminId', SuperAdminController.updateAdmin);
 router.delete('/admins/:adminId', SuperAdminController.deleteAdmin);

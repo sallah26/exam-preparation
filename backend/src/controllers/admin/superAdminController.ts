@@ -3,6 +3,8 @@ import { prisma } from '../../prisma/client';
 import { JWTService } from '../../modules/auth/services/jwt.service';
 import { AuthenticationError } from '../../modules/auth/utils/auth.errors';
 import { UserRole } from '@prisma/client';
+import { AdminInvitationService } from '../../services/admin-invitation.service';
+import { EmailService } from '../../services/email.service';
 
 export class SuperAdminController {
   /**
@@ -54,7 +56,66 @@ export class SuperAdminController {
   }
 
   /**
-   * Add new admin (super admin only)
+   * Invite a new admin with email
+   */
+  static async inviteAdmin(req: Request, res: Response): Promise<void> {
+    try {
+      const { fullName, email } = req.body;
+
+      // Validate input
+      if (!fullName || !email) {
+        res.status(400).json({
+          success: false,
+          message: 'Full name and email are required',
+        });
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid email format',
+        });
+        return;
+      }
+
+      // Get requesting admin ID from auth middleware
+      const invitedByAdminId = req.user?.id;
+
+      if (!invitedByAdminId) {
+        res.status(401).json({
+          success: false,
+          message: 'Authentication required',
+        });
+        return;
+      }
+
+      // Invite admin
+      const result = await AdminInvitationService.inviteAdmin({
+        fullName,
+        email,
+        invitedByAdminId,
+      });
+
+      if (!result.success) {
+        res.status(400).json(result);
+        return;
+      }
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Error inviting admin:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+      });
+    }
+  }
+
+  /**
+   * Add new admin (super admin only) - DEPRECATED: Use inviteAdmin instead
    */
   static async addAdmin(req: Request, res: Response): Promise<void> {
     try {

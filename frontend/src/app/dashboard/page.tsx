@@ -512,7 +512,18 @@ export default function DashboardPage() {
           {/* Admin Management Tab */}
           {activeTab === "admin-management" && isSuperAdmin(user) && (
             <div className="px-4 sm:px-0">
-              <AdminManagement />
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-xl font-semibold mb-4">Admin Management</h2>
+                <p className="text-gray-600 mb-6">
+                  Invite and manage administrators who can help manage the exam
+                  portal.
+                </p>
+                <button
+                  onClick={() => router.push("/dashboard/admins")}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-medium shadow-md hover:shadow-lg transition-all">
+                  Go to Admin Management
+                </button>
+              </div>
             </div>
           )}
 
